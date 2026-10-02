@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=夸克网盘
+Comment=夸克网盘 (Windows 版 via Wine)
+Exec=AppRun
+Icon=icon
+Type=Application
+Categories=Network;FileTransfer;
+StartupWMClass=quark_cloud_drive.exe
+Terminal=false

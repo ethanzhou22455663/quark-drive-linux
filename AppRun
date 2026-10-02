@@ -1,0 +1,48 @@
+#!/bin/bash
+# QuarkNetdisk AppImage AppRun
+# 用捆绑的 Wine 启动夸克网盘；首次运行初始化 prefix；支持 --dpi xxx 调整缩放（默认 200）
+APPDIR="${APPDIR:-$(cd "$(dirname "$(readlink -f "$0")")" && pwd)}"
+
+DATA_ROOT="${XDG_DATA_HOME:-$HOME/.local/share}/quark-netdisk"
+PREFIX_DIR="$DATA_ROOT/prefix"
+
+# ---- 参数解析：--dpi <60-480> / --dpi=<60-480>，其余参数透传 ----
+DPI=200
+ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dpi)   DPI="$2"; shift 2 ;;
+        --dpi=*) DPI="${1#--dpi=}"; shift ;;
+        --help|-h)
+            echo "用法: QuarkNetdisk [选项] [透传给应用的参数]"
+            echo "  --dpi <N>    设置界面缩放百分比 (60-480)，默认 200"
+            echo "  --help       显示本帮助"
+            exit 0 ;;
+        *) ARGS+=("$1"); shift ;;
+    esac
+done
+case "$DPI" in ''|*[!0-9]*) DPI=200 ;; esac
+[ "$DPI" -ge 60 ] && [ "$DPI" -le 480 ] || DPI=200
+
+# ---- 首次运行：初始化 prefix ----
+if [ ! -d "$PREFIX_DIR/drive_c" ]; then
+    mkdir -p "$DATA_ROOT"
+    echo "首次运行，正在初始化运行环境（约 300MB，请稍候）..."
+    cp -a "$APPDIR/runtime/prefix-template" "$PREFIX_DIR" || exit 1
+    echo "初始化完成。"
+fi
+
+# ---- 应用 DPI 设置（直接写用户 prefix 的 user.reg，需在 wine 启动前）----
+# LogPixels 单位：96 = 100%，即 LogPixels = N * 96 / 100（200% → 192）
+HEX=$(printf '%08x' $(( DPI * 96 / 100 )))
+REG="$PREFIX_DIR/user.reg"
+if [ -f "$REG" ] && grep -q '"LogPixels"=dword:' "$REG"; then
+    sed -i "s/\"LogPixels\"=dword:[0-9a-f]*/\"LogPixels\"=dword:$HEX/" "$REG"
+fi
+
+export WINEPREFIX="$PREFIX_DIR"
+export WINEDEBUG="-all"
+
+exec "$APPDIR/runtime/wine/bin/wine" \
+    "$APPDIR/runtime/app/7.3.5.810/quark_cloud_drive.exe" \
+    --disable-gpu --disable-gpu-compositing "${ARGS[@]}"
